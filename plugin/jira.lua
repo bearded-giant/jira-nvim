@@ -1,3 +1,3 @@
-vim.api.nvim_create_user_command("Jira", function()
-  require("jira").open()
-end, {})
+vim.api.nvim_create_user_command("Jira", function(opts)
+  require("jira").open(opts.args ~= "" and opts.args or nil)
+end, { nargs = "?" })

@@ -1,6 +1,6 @@
 -- sprint.lua: Sprint queries and task grouping
 local api = require("jira.jira-api.api")
-local config = require("jira.state").config
+local config = require("jira.config")
 local M = {}
 
 -- Cache for sprint data
@@ -31,15 +31,14 @@ local function safe_get(obj, key, subkey)
 end
 
 -- Get current active sprint issues
-function M.get_active_sprint_issues()
+function M.get_active_sprint_issues(project)
   local now = os.time()
   if cache.data and (now - cache.timestamp) < cache.ttl then
     return cache.data, nil
   end
 
-  local project = config.jira.project
   if not project then
-    return nil, "JIRA_PROJECT not set"
+    return nil, "Project Key is required"
   end
 
   local jql = string.format(
@@ -81,7 +80,7 @@ function M.get_active_sprint_issues()
         time_estimate = fields.timeestimate
       end
 
-      local story_point_field = config.jira.story_point_field
+      local story_point_field = config.options.jira.story_point_field
       local story_points = safe_get(fields, story_point_field)
 
       table.insert(all_issues, {

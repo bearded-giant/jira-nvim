@@ -3,17 +3,28 @@ local M = {}
 local api = vim.api
 
 local state = require "jira.state"
+local config = require "jira.config"
 local render = require "jira.render"
 local util = require "jira.util"
 local sprint = require("jira.jira-api.sprint")
 
 M.setup = function(opts)
-  state.config = vim.tbl_deep_extend("force", state.config, opts or {})
+  config.setup(opts)
 end
 
-M.open = function()
-  vim.notify("Loading Dashboard...", vim.log.levels.INFO)
-  local issues, err = sprint.get_active_sprint_issues()
+M.open = function(project_key)
+  project_key = project_key or os.getenv("JIRA_PROJECT")
+  if not project_key then
+    project_key = vim.fn.input("Jira Project Key: ")
+  end
+
+  if not project_key or project_key == "" then
+     vim.notify("Project key is required", vim.log.levels.ERROR)
+     return
+  end
+
+  vim.notify("Loading Dashboard for " .. project_key .. "...", vim.log.levels.INFO)
+  local issues, err = sprint.get_active_sprint_issues(project_key)
   if err then
     vim.notify("Error: " .. err, vim.log.levels.ERROR)
     return
@@ -25,7 +36,7 @@ M.open = function()
 
   -- Fetch Status Colors
   local api_client = require("jira.jira-api.api")
-  local project_statuses, st_err = api_client.get_project_statuses(state.config.jira.project)
+  local project_statuses, st_err = api_client.get_project_statuses(project_key)
   if not st_err and project_statuses then
     local function get_theme_color(groups, attr)
       for _, g in ipairs(groups) do

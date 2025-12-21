@@ -1,16 +1,16 @@
 -- api.lua: Jira REST API client using curl
-local config = require("jira.state").config
+local config = require("jira.config")
 local M = {}
 
 -- Get environment variables
 local function get_env()
-  return config.jira
+  return config.options.jira
 end
 
 -- Validate environment variables
 local function validate_env()
   local env = get_env()
-  if not env.base or not env.email or not env.token or not env.project then
+  if not env.base or not env.email or not env.token then
     vim.notify(
       "Missing Jira environment variables. Please check your setup.",
       vim.log.levels.ERROR
@@ -71,7 +71,7 @@ end
 
 -- Search for issues using JQL
 function M.search_issues(jql, page_token, max_results, fields)
-  local story_point_field = config.jira.story_point_field
+  local story_point_field = config.options.jira.story_point_field
   fields = fields or { "summary", "status", "parent", "priority", "assignee", "timespent", "timeestimate", "issuetype", story_point_field }
 
   local data = {
