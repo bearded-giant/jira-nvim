@@ -13,7 +13,13 @@ M.setup = function(opts)
 end
 
 M.open = function(project_key)
-  project_key = project_key or os.getenv("JIRA_PROJECT")
+  -- Validate Config
+  local jc = config.options.jira
+  if not jc.base or jc.base == "" or not jc.email or jc.email == "" or not jc.token or jc.token == "" then
+    vim.notify("Jira configuration is missing. Please run setup() with base, email, and token.", vim.log.levels.ERROR)
+    return
+  end
+
   if not project_key then
     project_key = vim.fn.input("Jira Project Key: ")
   end
@@ -33,6 +39,8 @@ M.open = function(project_key)
     vim.notify("No issues in active sprint.", vim.log.levels.WARN)
     return
   end
+
+  vim.notify("Loaded Dashboard for " .. project_key .. "...", vim.log.levels.INFO)
 
   -- Fetch Status Colors
   local api_client = require("jira.jira-api.api")
