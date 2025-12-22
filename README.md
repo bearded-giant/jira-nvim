@@ -16,6 +16,7 @@ A Neovim plugin for managing JIRA tasks with a beautiful UI
 - 👤 Assign tasks to yourself
 - 🎨 Beautiful UI with syntax highlighting
 - 🎨 Edit task description, comment as Markdown
+- 🎨 Git integration
 
 ## TODO
 - [x] Jira sprint board
