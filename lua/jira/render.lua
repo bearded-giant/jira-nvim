@@ -1,5 +1,6 @@
 local state = require("jira.state")
 local util = require("jira.util")
+local ui = require("jira.ui")
 local api = vim.api
 
 local MAX = {
@@ -241,7 +242,7 @@ local function render_issue_line(node, depth, row)
 
   -- Highlight Status
   local right_status_start = current_col + #assignee_str + #ass_pad + 2
-  local status_hl = state.status_hls[node.status] or (is_root and "JiraStatusRoot" or "JiraStatus")
+  local status_hl = ui.get_status_hl(node.status)
   add_hl(highlights, right_status_start, status_str, status_hl)
 
   api.nvim_buf_set_lines(state.buf, row, row + 1, false, { full_line })

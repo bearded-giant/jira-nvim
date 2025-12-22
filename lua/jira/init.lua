@@ -55,45 +55,37 @@ M.load_view = function(project_key, view_name)
       return
     end
 
-    -- Fetch Status Colors
-    local api_client = require("jira.jira-api.api")
-    api_client.get_project_statuses(project_key, function(project_statuses, st_err)
-      vim.schedule(function()
-        ui.stop_loading()
+    vim.schedule(function()
+      ui.stop_loading()
 
-        -- Setup UI if not already created
-        if not state.win or not api.nvim_win_is_valid(state.win) then
-          ui.create_window()
-          ui.setup_static_highlights()
-        end
-        
-        if not st_err and project_statuses then
-          ui.setup_highlights(project_statuses)
-        end
+      -- Setup UI if not already created
+      if not state.win or not api.nvim_win_is_valid(state.win) then
+        ui.create_window()
+        ui.setup_static_highlights()
+      end
 
-        if not issues or #issues == 0 then
-          state.tree = {}
-          render.clear(state.buf)
-          render.render_issue_tree(state.tree, state.current_view)
-          vim.notify("No issues found in " .. view_name .. ".", vim.log.levels.WARN)
-        else
-          state.tree = util.build_issue_tree(issues)
-          render.clear(state.buf)
-          render.render_issue_tree(state.tree, state.current_view)
-          vim.notify("Loaded " .. view_name .. " for " .. project_key, vim.log.levels.INFO)
-        end
+      if not issues or #issues == 0 then
+        state.tree = {}
+        render.clear(state.buf)
+        render.render_issue_tree(state.tree, state.current_view)
+        vim.notify("No issues found in " .. view_name .. ".", vim.log.levels.WARN)
+      else
+        state.tree = util.build_issue_tree(issues)
+        render.clear(state.buf)
+        render.render_issue_tree(state.tree, state.current_view)
+        vim.notify("Loaded " .. view_name .. " for " .. project_key, vim.log.levels.INFO)
+      end
 
-        -- Keymaps
-        local opts = { noremap = true, silent = true, buffer = state.buf }
-        vim.keymap.set("n", "o", function() require("jira").toggle_node() end, opts)
-        vim.keymap.set("n", "<CR>", function() require("jira").toggle_node() end, opts)
-        vim.keymap.set("n", "<Tab>", function() require("jira").toggle_node() end, opts)
+      -- Keymaps
+      local opts = { noremap = true, silent = true, buffer = state.buf }
+      vim.keymap.set("n", "o", function() require("jira").toggle_node() end, opts)
+      vim.keymap.set("n", "<CR>", function() require("jira").toggle_node() end, opts)
+      vim.keymap.set("n", "<Tab>", function() require("jira").toggle_node() end, opts)
 
-        -- Tab switching
-        vim.keymap.set("n", "S", function() require("jira").load_view(state.project_key, "Active Sprint") end, opts)
-        vim.keymap.set("n", "B", function() require("jira").load_view(state.project_key, "Backlog") end, opts)
-        vim.keymap.set("n", "J", function() require("jira").prompt_jql() end, opts)
-      end)
+      -- Tab switching
+      vim.keymap.set("n", "S", function() require("jira").load_view(state.project_key, "Active Sprint") end, opts)
+      vim.keymap.set("n", "B", function() require("jira").load_view(state.project_key, "Backlog") end, opts)
+      vim.keymap.set("n", "J", function() require("jira").prompt_jql() end, opts)
     end)
   end)
 end

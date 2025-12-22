@@ -2,42 +2,66 @@ local M = {}
 local api = vim.api
 local state = require("jira.state")
 
-function M.setup_highlights(project_statuses)
-  if not project_statuses then return end
-
-  local function get_theme_color(groups, attr)
-    for _, g in ipairs(groups) do
-      local hl = vim.api.nvim_get_hl(0, { name = g, link = false })
-      if hl and hl[attr] then return hl[attr] end
-    end
-    return nil
+local function get_theme_color(groups, attr)
+  for _, g in ipairs(groups) do
+    local hl = vim.api.nvim_get_hl(0, { name = g, link = false })
+    if hl and hl[attr] then return string.format("#%06x", hl[attr]) end
   end
+  return nil
+end
 
-  local color_map = {
-    ["green"] = get_theme_color({ "DiagnosticOk", "String", "DiffAdd" }, "fg") or "#a6e3a1",
-    ["blue-gray"] = get_theme_color({ "DiagnosticInfo", "Function", "DiffChange" }, "fg") or "#89b4fa",
-    ["medium-gray"] = get_theme_color({ "DiagnosticHint", "Comment", "NonText" }, "fg") or "#9399b2",
-    ["yellow"] = get_theme_color({ "DiagnosticWarn", "WarningMsg", "Todo" }, "fg") or "#f9e2af",
-    ["red"] = get_theme_color({ "DiagnosticError", "ErrorMsg", "DiffDelete" }, "fg") or "#f38ba8",
-    ["brown"] = get_theme_color({ "Special", "Constant" }, "fg") or "#ef9f76",
+local function get_palette()
+  return {
+    get_theme_color({ "DiagnosticOk", "String", "DiffAdd" }, "fg") or "#a6e3a1",         -- Green
+    get_theme_color({ "DiagnosticInfo", "Function", "DiffChange" }, "fg") or "#89b4fa",  -- Blue
+    get_theme_color({ "DiagnosticWarn", "WarningMsg", "Todo" }, "fg") or "#f9e2af",      -- Yellow
+    get_theme_color({ "DiagnosticError", "ErrorMsg", "DiffDelete" }, "fg") or "#f38ba8", -- Red
+    get_theme_color({ "Special", "Constant" }, "fg") or "#cba6f7",                       -- Magenta
+    get_theme_color({ "Identifier", "PreProc" }, "fg") or "#89dceb",                     -- Cyan
+    get_theme_color({ "Cursor", "CursorIM" }, "fg") or "#524f67",                        -- Grey
   }
+end
 
+function M.get_status_hl(status_name)
+  if not status_name or status_name == "" then return "JiraStatus" end
+
+  local hl_name = "JiraStatus_" .. status_name:gsub("%s+", "_"):gsub("[^%w_]", "")
+  if state.status_hls[status_name] then return hl_name end
+
+  local palette = get_palette()
   local bg_base = get_theme_color({ "Normal" }, "bg") or "#1e1e2e"
 
-  for _, itype in ipairs(project_statuses) do
-    for _, st in ipairs(itype.statuses or {}) do
-      local hl_name = "JiraStatus_" .. st.name:gsub("%s+", "_")
-      local color_name = st.statusCategory and st.statusCategory.colorName or "medium-gray"
-      local color = color_map[color_name] or color_map["medium-gray"]
-
-      vim.api.nvim_set_hl(0, hl_name, {
-        fg = bg_base,
-        bg = color,
-        bold = true,
-      })
-      state.status_hls[st.name] = hl_name
+  local name_upper = status_name:upper()
+  local color
+  if name_upper:find("READY FOR DEV") or name_upper:find("READY FOR TEST") then
+    color = palette[7] -- Grey
+  elseif name_upper:find("DONE") or name_upper:find("RESOLVED") or name_upper:find("CLOSED") or name_upper:find("FINISHED") then
+    color = palette[1] -- Green
+  elseif name_upper:find("PROGRESS") or name_upper:find("DEVELOPMENT") or name_upper:find("BUILDING") or name_upper:find("WORKING") then
+    color = palette[3] -- Yellow
+  elseif name_upper:find("TODO") or name_upper:find("OPEN") or name_upper:find("BACKLOG") then
+    color = palette[2] -- Blue
+  elseif name_upper:find("BLOCK") or name_upper:find("REJECT") or name_upper:find("BUG") or name_upper:find("ERROR") then
+    color = palette[4] -- Red
+  elseif name_upper:find("REVIEW") or name_upper:find("QA") or name_upper:find("TEST") then
+    color = palette[5] -- Magenta
+  else
+    -- Hash
+    local hash = 0
+    for i = 1, #status_name do
+      hash = (hash * 31 + string.byte(status_name, i)) % #palette
     end
+    color = palette[hash + 1]
   end
+
+  vim.api.nvim_set_hl(0, hl_name, {
+    fg = bg_base,
+    bg = color,
+    bold = true,
+  })
+
+  state.status_hls[status_name] = hl_name
+  return hl_name
 end
 
 function M.setup_static_highlights()
@@ -170,3 +194,4 @@ function M.stop_loading()
 end
 
 return M
+
