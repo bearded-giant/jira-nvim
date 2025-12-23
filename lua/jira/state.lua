@@ -10,6 +10,7 @@ local state = {
   current_view = nil,
   custom_jql = nil,
   cache = {},
+  my_issues_projects = {},
 }
 
 return state

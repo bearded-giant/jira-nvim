@@ -1,0 +1,225 @@
+*jira.txt*  Jira issue management for Neovim
+
+Author:  Bryan Grimes
+License: MIT
+
+==============================================================================
+CONTENTS                                                        *jira-contents*
+
+    1. Introduction .......................... |jira-introduction|
+    2. Requirements .......................... |jira-requirements|
+    3. Setup ................................. |jira-setup|
+    4. Configuration ......................... |jira-configuration|
+    5. Commands .............................. |jira-commands|
+    6. Keymaps ............................... |jira-keymaps|
+    7. Views ................................. |jira-views|
+
+==============================================================================
+1. INTRODUCTION                                             *jira-introduction*
+
+jira.nvim is a plugin for viewing and managing Jira issues with an
+interactive TUI. It provides sprint boards, backlog views, cross-project
+issue tracking, and common issue actions like status transitions and
+story creation.
+
+==============================================================================
+2. REQUIREMENTS                                             *jira-requirements*
+
+- Neovim 0.9+
+- curl (for API requests)
+- Jira Cloud instance with API access
+- API token from https://id.atlassian.com/manage-profile/security/api-tokens
+
+==============================================================================
+3. SETUP                                                          *jira-setup*
+
+Using lazy.nvim: >lua
+
+    {
+      "your-username/jira.nvim",
+      config = function()
+        require("jira").setup({
+          jira = {
+            base = "https://your-domain.atlassian.net",
+            email = "your-email@example.com",
+            token = "your-api-token",
+          },
+        })
+      end,
+    }
+<
+
+Using environment variables: >lua
+
+    require("jira").setup({
+      jira = {
+        base = "https://your-domain.atlassian.net",
+        email = vim.fn.getenv("JIRA_EMAIL"),
+        token = vim.fn.getenv("JIRA_API_TOKEN"),
+      },
+    })
+<
+
+==============================================================================
+4. CONFIGURATION                                          *jira-configuration*
+
+                                                              *jira.setup()*
+setup({opts})
+
+    Configure jira.nvim with the following options:
+
+    jira.base ~
+        Required. URL of your Jira instance.
+        Example: "https://your-domain.atlassian.net"
+
+    jira.email ~
+        Required. Your Atlassian account email.
+
+    jira.token ~
+        Required. Your Jira API token.
+
+    jira.limit ~
+        Optional. Maximum issues per query. Default: 500
+
+    projects ~
+        Optional. Table of project-specific overrides.
+
+        projects[KEY].story_point_field ~
+            Custom field ID for story points.
+
+        projects[KEY].acceptance_criteria_field ~
+            Custom field ID for acceptance criteria.
+
+Example with all options: >lua
+
+    require("jira").setup({
+      jira = {
+        base = "https://your-domain.atlassian.net",
+        email = "your-email@example.com",
+        token = "your-api-token",
+        limit = 500,
+      },
+      projects = {
+        ["PROJECT"] = {
+          story_point_field = "customfield_10035",
+          acceptance_criteria_field = "customfield_10016",
+        },
+      },
+    })
+<
+
+Finding custom field IDs: >bash
+
+    curl -s -u "email:token" \
+      "https://your-domain.atlassian.net/rest/api/3/field" | \
+      jq '.[] | select(.custom==true) | {id, name}'
+<
+
+==============================================================================
+5. COMMANDS                                                    *jira-commands*
+
+                                                                       *:Jira*
+:Jira [project_key]
+
+    Open the Jira board. If project_key is omitted, you will be prompted.
+
+    Examples: >vim
+        :Jira SEC
+        :Jira
+<
+
+==============================================================================
+6. KEYMAPS                                                      *jira-keymaps*
+
+All keymaps are buffer-local to the Jira board window.
+
+NAVIGATION ~
+                                                              *jira-keymap-o*
+o, <CR>, <Tab>      Toggle expand/collapse on parent issues.
+
+                                                              *jira-keymap-q*
+q                   Close the Jira board.
+
+VIEWS ~
+                                                              *jira-keymap-S*
+S                   Switch to Active Sprint view.
+
+                                                              *jira-keymap-B*
+B                   Switch to Backlog view.
+
+                                                              *jira-keymap-M*
+M                   Configure and load My Issues view.
+                    Prompts for comma-separated project keys.
+                    Example: "SEC, PLAT, INFRA"
+
+                                                              *jira-keymap-J*
+J                   Enter a custom JQL query.
+
+                                                              *jira-keymap-H*
+H                   Show help screen with all keymaps.
+
+                                                              *jira-keymap-r*
+r                   Refresh current view (clears cache).
+
+ISSUE ACTIONS ~
+                                                              *jira-keymap-s*
+s                   Change status of issue under cursor.
+                    Opens a picker with available transitions.
+
+                                                              *jira-keymap-c*
+c                   Create a new story.
+                    Uses current project, or prompts if in My Issues view.
+
+                                                              *jira-keymap-d*
+d                   Close issue under cursor.
+                    Finds and applies Done/Closed/Resolved transition.
+
+                                                              *jira-keymap-K*
+K                   Show issue details popup.
+                    Displays status, assignee, priority, time tracking.
+
+                                                              *jira-keymap-m*
+m                   Read full issue as markdown.
+                    Shows description and acceptance criteria.
+
+                                                             *jira-keymap-gx*
+gx                  Open issue in browser.
+
+==============================================================================
+7. VIEWS                                                          *jira-views*
+
+                                                         *jira-active-sprint*
+Active Sprint ~
+
+Shows all issues in the current active sprint for the specified project.
+Issues are displayed hierarchically with parent tasks and their subtasks.
+
+JQL: project = 'KEY' AND sprint in openSprints()
+
+                                                              *jira-backlog*
+Backlog ~
+
+Shows issues not assigned to an active sprint and not in Done status.
+
+JQL: project = 'KEY' AND (sprint is EMPTY OR sprint not in openSprints())
+     AND statusCategory != Done
+
+                                                            *jira-my-issues*
+My Issues ~
+
+Cross-project view showing issues assigned to you. Press M to configure
+the list of projects to include. The selection persists for the session.
+
+JQL: assignee = currentUser() AND project IN (KEY1, KEY2, ...)
+
+                                                            *jira-custom-jql*
+Custom JQL ~
+
+Press J to enter any JQL query. Useful for custom filters like:
+
+    assignee = currentUser() AND status = "In Progress"
+    project = SEC AND labels = "urgent"
+    created >= -7d AND project = PLAT
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

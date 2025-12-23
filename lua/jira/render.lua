@@ -261,6 +261,7 @@ local function render_header(view)
   local tabs = {
     { name = "Active Sprint", key = "S" },
     { name = "Backlog", key = "B" },
+    { name = "My Issues", key = "M" },
     { name = "JQL", key = "J" },
     { name = "Help", key = "H" },
   }
@@ -296,7 +297,11 @@ function M.render_help(view)
     { k = "o, <CR>, <Tab>", d = "Toggle Node (Expand/Collapse)" },
     { k = "S", d = "Switch to Active Sprint" },
     { k = "B", d = "Switch to Backlog" },
+    { k = "M", d = "My Issues (cross-project)" },
     { k = "J", d = "Custom JQL Search" },
+    { k = "s", d = "Change issue status" },
+    { k = "c", d = "Create new story" },
+    { k = "d", d = "Close issue (Done)" },
     { k = "K", d = "Show Issue Details (Popup)" },
     { k = "m", d = "Read Task as Markdown" },
     { k = "gx", d = "Open Task in Browser" },

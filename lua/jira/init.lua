@@ -32,6 +32,11 @@ M.toggle_node = function()
 end
 
 local function get_cache_key(project_key, view_name)
+  if view_name == "My Issues" then
+    local sorted = vim.tbl_map(function(p) return p end, state.my_issues_projects)
+    table.sort(sorted)
+    return "global:MyIssues:" .. table.concat(sorted, ",")
+  end
   local key = project_key .. ":" .. view_name
   if view_name == "JQL" then
     key = key .. ":" .. (state.custom_jql or "")
@@ -48,11 +53,17 @@ M.setup_keymaps = function()
   -- Tab switching
   vim.keymap.set("n", "S", function() require("jira").load_view(state.project_key, "Active Sprint") end, opts)
   vim.keymap.set("n", "B", function() require("jira").load_view(state.project_key, "Backlog") end, opts)
+  vim.keymap.set("n", "M", function() require("jira").prompt_my_issues_projects() end, opts)
   vim.keymap.set("n", "J", function() require("jira").prompt_jql() end, opts)
   vim.keymap.set("n", "H", function() require("jira").load_view(state.project_key, "Help") end, opts)
   vim.keymap.set("n", "K", function() require("jira").show_issue_details() end, opts)
   vim.keymap.set("n", "m", function() require("jira").read_task() end, opts)
   vim.keymap.set("n", "gx", function() require("jira").open_in_browser() end, opts)
+
+  -- Issue actions
+  vim.keymap.set("n", "s", function() require("jira").change_status() end, opts)
+  vim.keymap.set("n", "c", function() require("jira").create_story() end, opts)
+  vim.keymap.set("n", "d", function() require("jira").close_issue() end, opts)
 
   -- Actions
   vim.keymap.set("n", "r", function()
@@ -236,6 +247,250 @@ M.open_in_browser = function()
 
   local url = base .. "browse/" .. node.key
   vim.ui.open(url)
+end
+
+M.change_status = function()
+  local cursor = api.nvim_win_get_cursor(state.win)
+  local row = cursor[1] - 1
+  local node = state.line_map[row]
+  if not node or not node.key then
+    vim.notify("No issue under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  local jira_api = require("jira.jira-api.api")
+
+  ui.start_loading("Fetching transitions...")
+  jira_api.get_transitions(node.key, function(transitions, err)
+    vim.schedule(function()
+      ui.stop_loading()
+      if err then
+        vim.notify("Error: " .. err, vim.log.levels.ERROR)
+        return
+      end
+
+      if not transitions or #transitions == 0 then
+        vim.notify("No transitions available for " .. node.key, vim.log.levels.WARN)
+        return
+      end
+
+      vim.ui.select(transitions, {
+        prompt = "Transition " .. node.key .. " to:",
+        format_item = function(item)
+          return item.name
+        end,
+      }, function(choice)
+        if not choice then return end
+
+        ui.start_loading("Transitioning...")
+        jira_api.transition_issue(node.key, choice.id, function(success, t_err)
+          vim.schedule(function()
+            ui.stop_loading()
+            if t_err then
+              vim.notify("Transition failed: " .. t_err, vim.log.levels.ERROR)
+              return
+            end
+            vim.notify(node.key .. " -> " .. choice.name, vim.log.levels.INFO)
+
+            local cache_key = get_cache_key(state.project_key, state.current_view)
+            state.cache[cache_key] = nil
+            if state.current_view == "My Issues" then
+              M.load_my_issues_view()
+            else
+              M.load_view(state.project_key, state.current_view)
+            end
+          end)
+        end)
+      end)
+    end)
+  end)
+end
+
+M.close_issue = function()
+  local cursor = api.nvim_win_get_cursor(state.win)
+  local row = cursor[1] - 1
+  local node = state.line_map[row]
+  if not node or not node.key then
+    vim.notify("No issue under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  local jira_api = require("jira.jira-api.api")
+
+  ui.start_loading("Finding done transition...")
+  jira_api.get_transitions(node.key, function(transitions, err)
+    vim.schedule(function()
+      ui.stop_loading()
+      if err then
+        vim.notify("Error: " .. err, vim.log.levels.ERROR)
+        return
+      end
+
+      local done_transition = nil
+      for _, t in ipairs(transitions or {}) do
+        local name_upper = (t.name or ""):upper()
+        if name_upper:find("DONE") or name_upper:find("CLOSED") or name_upper:find("RESOLVED") or name_upper:find("COMPLETE") then
+          done_transition = t
+          break
+        end
+      end
+
+      if not done_transition then
+        vim.notify("No 'Done' transition found. Use 's' to see all transitions.", vim.log.levels.WARN)
+        return
+      end
+
+      ui.start_loading("Closing issue...")
+      jira_api.transition_issue(node.key, done_transition.id, function(success, t_err)
+        vim.schedule(function()
+          ui.stop_loading()
+          if t_err then
+            vim.notify("Failed to close: " .. t_err, vim.log.levels.ERROR)
+            return
+          end
+          vim.notify(node.key .. " -> " .. done_transition.name, vim.log.levels.INFO)
+
+          local cache_key = get_cache_key(state.project_key, state.current_view)
+          state.cache[cache_key] = nil
+          if state.current_view == "My Issues" then
+            M.load_my_issues_view()
+          else
+            M.load_view(state.project_key, state.current_view)
+          end
+        end)
+      end)
+    end)
+  end)
+end
+
+M._prompt_and_create_story = function(project_key)
+  vim.ui.input({ prompt = "Story summary: " }, function(summary)
+    if not summary or summary == "" then return end
+
+    local jira_api = require("jira.jira-api.api")
+    ui.start_loading("Creating story...")
+
+    jira_api.create_issue(project_key, summary, "Story", function(result, err)
+      vim.schedule(function()
+        ui.stop_loading()
+        if err then
+          vim.notify("Failed to create: " .. err, vim.log.levels.ERROR)
+          return
+        end
+        vim.notify("Created " .. result.key .. ": " .. summary, vim.log.levels.INFO)
+
+        local cache_key = get_cache_key(state.project_key, state.current_view)
+        state.cache[cache_key] = nil
+        if state.current_view == "Backlog" then
+          M.load_view(state.project_key, state.current_view)
+        elseif state.current_view == "My Issues" then
+          local my_cache_key = get_cache_key(nil, "My Issues")
+          state.cache[my_cache_key] = nil
+          M.load_my_issues_view()
+        end
+      end)
+    end)
+  end)
+end
+
+M.create_story = function()
+  if state.current_view == "My Issues" then
+    if #state.my_issues_projects == 0 then
+      vim.notify("No projects configured", vim.log.levels.WARN)
+      return
+    elseif #state.my_issues_projects == 1 then
+      M._prompt_and_create_story(state.my_issues_projects[1])
+    else
+      vim.ui.select(state.my_issues_projects, {
+        prompt = "Create story in project:",
+      }, function(selected_project)
+        if not selected_project then return end
+        M._prompt_and_create_story(selected_project)
+      end)
+    end
+  else
+    local project = state.project_key
+    if not project or project == "" then
+      vim.notify("No project context", vim.log.levels.WARN)
+      return
+    end
+    M._prompt_and_create_story(project)
+  end
+end
+
+M.load_my_issues_view = function()
+  if #state.my_issues_projects == 0 then
+    vim.notify("No projects selected. Press M to configure.", vim.log.levels.WARN)
+    return
+  end
+
+  state.current_view = "My Issues"
+
+  local cache_key = get_cache_key(nil, "My Issues")
+  local cached_issues = state.cache[cache_key]
+
+  local function process_issues(issues)
+    vim.schedule(function()
+      ui.stop_loading()
+      if not state.win or not api.nvim_win_is_valid(state.win) then
+        ui.create_window()
+        ui.setup_static_highlights()
+      end
+
+      if not issues or #issues == 0 then
+        state.tree = {}
+        render.clear(state.buf)
+        render.render_issue_tree(state.tree, state.current_view)
+        vim.notify("No issues found.", vim.log.levels.WARN)
+      else
+        state.tree = util.build_issue_tree(issues)
+        render.clear(state.buf)
+        render.render_issue_tree(state.tree, state.current_view)
+      end
+      M.setup_keymaps()
+    end)
+  end
+
+  if cached_issues then
+    process_issues(cached_issues)
+    return
+  end
+
+  local project_list = table.concat(state.my_issues_projects, ", ")
+  local jql = string.format("assignee = currentUser() AND project IN (%s) ORDER BY updated DESC", project_list)
+
+  ui.start_loading("Loading My Issues...")
+
+  sprint.get_issues_by_jql(state.my_issues_projects[1], jql, function(issues, err)
+    if err then
+      vim.schedule(function()
+        ui.stop_loading()
+        vim.notify("Error: " .. err, vim.log.levels.ERROR)
+      end)
+      return
+    end
+    state.cache[cache_key] = issues
+    process_issues(issues)
+  end)
+end
+
+M.prompt_my_issues_projects = function()
+  local default = table.concat(state.my_issues_projects, ", ")
+  vim.ui.input({ prompt = "My Issues - Projects (comma-separated): ", default = default }, function(input)
+    if not input then return end
+    if input == "" then
+      state.my_issues_projects = {}
+      vim.notify("My Issues projects cleared", vim.log.levels.INFO)
+      return
+    end
+    state.my_issues_projects = {}
+    for _, p in ipairs(vim.split(input, ",", { trimempty = true })) do
+      table.insert(state.my_issues_projects, vim.trim(p):upper())
+    end
+    local cache_key = get_cache_key(nil, "My Issues")
+    state.cache[cache_key] = nil
+    M.load_my_issues_view()
+  end)
 end
 
 M.open = function(project_key)

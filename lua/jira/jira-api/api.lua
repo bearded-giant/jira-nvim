@@ -155,4 +155,23 @@ function M.get_project_statuses(project, callback)
   curl_request("GET", "/rest/api/3/project/" .. project .. "/statuses", nil, callback)
 end
 
+-- Create a new issue
+function M.create_issue(project_key, summary, issue_type, callback)
+  local data = {
+    fields = {
+      project = { key = project_key },
+      summary = summary,
+      issuetype = { name = issue_type or "Story" },
+    },
+  }
+
+  curl_request("POST", "/rest/api/3/issue", data, function(result, err)
+    if err then
+      if callback then callback(nil, err) end
+      return
+    end
+    if callback then callback(result, nil) end
+  end)
+end
+
 return M
