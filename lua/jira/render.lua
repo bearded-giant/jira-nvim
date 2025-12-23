@@ -168,10 +168,10 @@ local function render_issue_line(node, depth, row)
   local key = node.key or ""
   local title = truncate(node.summary or "", MAX.TITLE)
   local points = node.story_points or node.points
-  if points == nil or points == vim.NIL then
-    points = "?"
+  local pts = ""
+  if is_root and points ~= nil and points ~= vim.NIL then
+    pts = string.format(" 󰫢 %s", points)
   end
-  local pts = is_root and string.format(" 󰫢 %s", points) or ""
 
   local status = truncate(node.status or "Unknown", MAX.STATUS)
 
