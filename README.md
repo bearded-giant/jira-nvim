@@ -32,7 +32,7 @@ Using lazy.nvim:
 
 ```lua
 {
-  "your-username/jira.nvim",
+  "bearded-giant/jim.nvim",
   config = function()
     require("jira").setup({
       jira = {
